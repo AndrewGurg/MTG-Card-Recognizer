@@ -2,12 +2,12 @@ import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 import easyocr
-import pytesseract
+import argparse
+
 # PARAMETERS:
 # ksize, sigmaX, upper and lower thresholds
 
 reader = easyocr.Reader(['en'], gpu=False)
-# pytesseract.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
 
 
 def canny_edge_detection(frame):
@@ -116,7 +116,6 @@ def get_setnum(image):
     return nameplate
 
 def read_text(reader, image):
-    #text = pytesseract.image_to_string(image)
     text = reader.readtext(image, allowlist="abcdefghigjlmnopqrstuvwxyz0123456789", text_threshold=0.8)
     for t in text:
          print("Text: ", t[1])
@@ -142,13 +141,16 @@ def find_card_outline(image):
         nameplate = get_nameplate(card_persp)
         cv.imshow("Nameplate", nameplate)
         # Read the nameplate
-        name = read_text(reader, nameplate)
+        cardname = read_text(reader, nameplate)[0][1]
         # Find the set information
         setinfo = get_setnum(card_persp)
         cv.imshow("Set Info", setinfo)
         # Read the setinfo
         settext= read_text(reader, setinfo)
 
+    
+    # Display card name
+    print("Card Name: %s            \r"%cardname, end="")
 
     # Display the original frame and the edge-detected frame 
     #cv.imshow("Original", image) 
@@ -159,9 +161,9 @@ def find_card_outline(image):
     return
 
 
-def VideoStream(): 
+def VideoStream(webcam_no=0): 
     # Open the default webcam  
-    cap = cv.VideoCapture(0) 
+    cap = cv.VideoCapture(webcam_no) 
     
     while True: 
         # Read a frame from the webcam 
@@ -181,11 +183,10 @@ def VideoStream():
     cv.destroyAllWindows()
     return
 
-def SingleImage():
-    im = cv.imread('Sample_Code/images/phone_img_smaller.jpg')
+def SingleImage(filename):
+    im = cv.imread('images/' + filename)
     assert im is not None, "file could not be read, check with os.path.exists()"
     rows,cols,ch = im.shape
-    print("Shape: ", im.shape)
 
     find_card_outline(im)
 
@@ -194,5 +195,24 @@ def SingleImage():
     return
 
 
-#VideoStream()
-SingleImage()
+if __name__ == "__main__":
+    modes = {'video': VideoStream,'image': SingleImage}
+    parser = argparse.ArgumentParser()
+
+    # Options for video/image mode and filename input
+    parser.add_argument('-m', '--mode',
+                        choices=modes, 
+                        help='Video stream or single image mode',
+                        required=True, type=str)
+    
+    parser.add_argument('-f', '--filename', 
+                        help='Filename for single image mode',
+                        required=False, type=str)
+    
+    parser.add_argument('-w', '--webcam', 
+                        help='Webcam number selected (defult 0)',
+                        required=False, type=int, default=0)
+    
+    # Runs specified mode with optional argument
+    args = parser.parse_args()
+    modes[args.mode](args.filename if args.mode=='image' else args.webcam)
