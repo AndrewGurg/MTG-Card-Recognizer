@@ -7,8 +7,6 @@ import argparse
 # PARAMETERS:
 # ksize, sigmaX, upper and lower thresholds
 
-reader = easyocr.Reader(['en'], gpu=False)
-
 
 def canny_edge_detection(frame):
     # Greyscale the image
@@ -115,56 +113,56 @@ def get_setnum(image):
     nameplate = image[(height - height//9):height, 0:width//2]
     return nameplate
 
-def read_text(reader, image):
-    text = reader.readtext(image, allowlist="abcdefghigjlmnopqrstuvwxyz0123456789", text_threshold=0.8)
-    for t in text:
-         print("Text: ", t[1])
-    return text
 
 def find_card_outline(image):
-    
-    cardname = ""
-
     # Perform Canny edge detection on the frame 
     blurred, edges = canny_edge_detection(image) 
     
     # Find the contours from the edges
     img_cnt, contours = find_contours(image, edges)
     
-    img_boxes, hasBox, box = find_boxes(image, contours)
-
-    if(hasBox):
-        fixedbox = arrange_points(box)
-        card_persp = get_perspective(image, fixedbox)
-        cv.imshow("Card", card_persp)
-        # Find the nameplate
-        nameplate = get_nameplate(card_persp)
-        cv.imshow("Nameplate", nameplate)
-        # Read the nameplate
-        cardname = read_text(reader, nameplate)[0][1]
-        # Find the set information
-        setinfo = get_setnum(card_persp)
-        cv.imshow("Set Info", setinfo)
-        # Read the setinfo
-        settext= read_text(reader, setinfo)
-
-    
-    # Display card name
-    print("Card Name: %s            \r"%cardname, end="")
+    # Make boxes around cards on image
+    img_w_boxes, hasBox, boxed_card = find_boxes(image, contours)
 
     # Display the original frame and the edge-detected frame 
     #cv.imshow("Original", image) 
     #cv.imshow("Blurred", blurred) 
     #cv.imshow("Edges", edges) 
     #cv.imshow("Contours", img_cnt)
-    cv.imshow("Boxes", img_boxes)
-    return
+    cv.imshow("Boxes", img_w_boxes)
+    return boxed_card, hasBox
+
+def read_text(reader, image):
+    text = reader.readtext(image, allowlist="abcdefghigjlmnopqrstuvwxyz0123456789", text_threshold=0.8)
+    # for t in text:
+    #      print("Text: ", t[1])
+    return text[0][1] if len(text) >= 1 else ""
+
+def read_card_from_box(reader, image, boxed_card):
+    fixedbox = arrange_points(boxed_card)
+    card_persp = get_perspective(image, fixedbox)
+    cv.imshow("Card", card_persp)
+    # Find the nameplate
+    nameplate = get_nameplate(card_persp)
+    cv.imshow("Nameplate", nameplate)
+    # Read the nameplate
+    cardname = read_text(reader, nameplate)
+    # Find the set information
+    setinfo = get_setnum(card_persp)
+    cv.imshow("Set Info", setinfo)
+    # Read the setinfo
+    #settext= read_text(reader, setinfo)
+
+    return cardname
 
 
 def VideoStream(webcam_no=0): 
     # Open the default webcam  
-    cap = cv.VideoCapture(webcam_no) 
-    
+    cap = cv.VideoCapture(webcam_no)
+
+    # Initialize easyOCR Reader
+    reader = easyocr.Reader(['en'], gpu=False)
+
     while True: 
         # Read a frame from the webcam 
         ret, frame = cap.read() 
@@ -172,8 +170,13 @@ def VideoStream(webcam_no=0):
             print('Image not captured') 
             break
         
-        find_card_outline(frame)
-        
+        # Find the card on the frame and isolate it
+        boxed_card, hasBox = find_card_outline(frame)
+        # Read the isolated card's name from the nameplate
+        if(hasBox):
+            cardname = read_card_from_box(reader, frame, boxed_card)
+            print("Card Name: %s            \r"%cardname, end="")
+
         # Exit the loop when 'q' key is pressed 
         if cv.waitKey(1) & 0xFF == ord('q'): 
             break
@@ -184,11 +187,19 @@ def VideoStream(webcam_no=0):
     return
 
 def SingleImage(filename):
+    # Read the image given filename
     im = cv.imread('images/' + filename)
     assert im is not None, "file could not be read, check with os.path.exists()"
-    rows,cols,ch = im.shape
+    
+    # Initialize easyOCR Reader
+    reader = easyocr.Reader(['en'], gpu=False)
 
-    find_card_outline(im)
+    # Find the card on the frame and isolate it
+    boxed_card, hasBox = find_card_outline(im)
+    # Read the isolated card's name from the nameplate
+    if(hasBox):
+        cardname = read_card_from_box(reader, im, boxed_card)
+        print("Card Name: %s            \r"%cardname, end="")
 
     if cv.waitKey(0) & 0xff == 27:  
         cv.destroyAllWindows()  
