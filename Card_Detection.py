@@ -159,10 +159,14 @@ def read_card_from_box(reader, image, boxed_card):
 def VideoStream(webcam_no=0): 
     # Open the default webcam  
     cap = cv.VideoCapture(webcam_no)
+    fps = cap.get(cv.CAP_PROP_FPS)
 
     # Initialize easyOCR Reader
     reader = easyocr.Reader(['en'], gpu=False)
 
+    # Keep track of the frame number
+    frameno = 0
+    reads_per_sec = 2
     while True: 
         # Read a frame from the webcam 
         ret, frame = cap.read() 
@@ -172,10 +176,15 @@ def VideoStream(webcam_no=0):
         
         # Find the card on the frame and isolate it
         boxed_card, hasBox = find_card_outline(frame)
-        # Read the isolated card's name from the nameplate
-        if(hasBox):
-            cardname = read_card_from_box(reader, frame, boxed_card)
-            print("Card Name: %s            \r"%cardname, end="")
+        # Only read a few times every second
+        if(frameno % (fps // reads_per_sec) == 0):
+            # Read the isolated card's name from the nameplate
+            if(hasBox):
+                cardname = read_card_from_box(reader, frame, boxed_card)
+                print("Card Name: %s            \r"%cardname, end="")
+
+        # Increment or reset frame count
+        frameno = frameno + 1 if frameno < fps-1 else 0
 
         # Exit the loop when 'q' key is pressed 
         if cv.waitKey(1) & 0xFF == ord('q'): 
